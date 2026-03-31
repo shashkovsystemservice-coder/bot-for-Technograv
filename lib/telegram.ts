@@ -94,3 +94,17 @@ export async function getWebhookInfo(): Promise<{
   const response = await fetch(`${TELEGRAM_API}/getWebhookInfo`)
   return response.json()
 }
+
+export async function setMyCommands(): Promise<{ ok: boolean }> {
+  const commands = [
+    { command: 'start', description: 'Запустить опрос' },
+    { command: 'reset', description: 'Очистить ответы и начать заново' },
+  ]
+  
+  const response = await fetch(`${TELEGRAM_API}/setMyCommands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ commands }),
+  })
+  return response.json()
+}

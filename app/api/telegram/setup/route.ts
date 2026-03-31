@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { setWebhook, deleteWebhook, getWebhookInfo } from '@/lib/telegram'
+import { setWebhook, deleteWebhook, getWebhookInfo, setMyCommands } from '@/lib/telegram'
 
 export async function POST(request: Request) {
   try {
@@ -7,6 +7,13 @@ export async function POST(request: Request) {
 
     if (action === 'set' && webhookUrl) {
       const result = await setWebhook(webhookUrl)
+      // Also set bot commands for persistent menu
+      await setMyCommands()
+      return NextResponse.json(result)
+    }
+
+    if (action === 'setCommands') {
+      const result = await setMyCommands()
       return NextResponse.json(result)
     }
 

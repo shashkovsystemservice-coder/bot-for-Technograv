@@ -1,8 +1,11 @@
 import { NextResponse } from 'next/server'
-import { generateText } from 'ai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
+const GOOGLE_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY || '')
 
 interface TelegramMessage {
   message_id: number
@@ -37,15 +40,33 @@ async function sendTelegramMessage(chatId: number, text: string): Promise<void> 
 
 async function generateGeminiResponse(userMessage: string, username?: string): Promise<string> {
   try {
-    const { text } = await generateText({
-      model: 'google/gemini-2.0-flash',
-      system: `Ты дружелюбный бот для проведения опросов WanderBot. 
+    if (!GOOGLE_API_KEY) {
+      console.error('[v0] GOOGLE_GENERATIVE_AI_API_KEY is not set')
+      return 'Извините, сервис временно недоступен.'
+    }
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    
+    const systemPrompt = `Ты дружелюбный бот для проведения опросов WanderBot. 
 Твоя задача - помогать пользователям и отвечать на их вопросы.
 Отвечай кратко, по-русски, дружелюбно и информативно.
-Если пользователь хочет пройти опрос, предложи ему начать с команды /start.`,
-      prompt: `Пользователь ${username || 'Гость'} написал: "${userMessage}"`,
+Если пользователь хочет пройти опрос, предложи ему начать с команды /start.`
+
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: `${systemPrompt}\n\nПользователь ${username || 'Гость'} написал: "${userMessage}"` }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 256,
+        temperature: 0.7,
+      },
     })
-    return text
+
+    const response = result.response
+    return response.text() || 'Извините, произошла ошибка при обработке запроса.'
   } catch (error) {
     console.error('[v0] Gemini API error:', error)
     return 'Извините, произошла ошибка при обработке запроса. Попробуйте ещё раз позже.'
@@ -54,15 +75,36 @@ async function generateGeminiResponse(userMessage: string, username?: string): P
 
 async function handleStartCommand(chatId: number, username?: string): Promise<void> {
   try {
-    const { text } = await generateText({
-      model: 'google/gemini-2.0-flash',
-      system: `Ты дружелюбный бот для опросов WanderBot. Поприветствуй пользователя.`,
-      prompt: `Поприветствуй пользователя ${username || 'Гость'} и расскажи, что ты бот для проведения опросов. 
+    if (!GOOGLE_API_KEY) {
+      await sendTelegramMessage(
+        chatId,
+        `Привет${username ? `, ${username}` : ''}! Я WanderBot - бот для опросов.\n\nИспользуйте /help для получения справки.`
+      )
+      return
+    }
+
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ 
+            text: `Ты дружелюбный бот для опросов WanderBot. Поприветствуй пользователя ${username || 'Гость'} и расскажи, что ты бот для проведения опросов. 
 Объясни, что ты можешь помочь с различными вопросами и провести опросы. 
 Упомяни доступные команды: /help для помощи. 
-Ответь кратко в 2-3 предложения.`,
+Ответь кратко в 2-3 предложения.` 
+          }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 256,
+        temperature: 0.7,
+      },
     })
-    await sendTelegramMessage(chatId, text)
+
+    const text = result.response.text()
+    await sendTelegramMessage(chatId, text || `Привет${username ? `, ${username}` : ''}! Я WanderBot.`)
   } catch (error) {
     console.error('[v0] Start command error:', error)
     await sendTelegramMessage(

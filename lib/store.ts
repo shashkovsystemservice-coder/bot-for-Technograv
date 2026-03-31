@@ -5,7 +5,7 @@ const surveys: Map<string, Survey> = new Map()
 const responses: Map<string, SurveyResponse[]> = new Map()
 const sessions: Map<number, UserSession> = new Map()
 
-// Initialize with a sample survey
+// Initialize with a sample survey (inactive)
 const sampleSurvey: Survey = {
   id: 'survey-1',
   title: 'Опрос удовлетворённости',
@@ -29,11 +29,48 @@ const sampleSurvey: Survey = {
       type: 'text',
     },
   ],
+  isActive: false,
+  createdAt: new Date(),
+}
+
+// Expert Interview Survey - Stage I (ACTIVE)
+const expertSurvey: Survey = {
+  id: 'survey-expert-stage-1',
+  title: 'Стратегическая сессия: Запуск Этапа I',
+  description: 'Максим, эти 5 вопросов разблокируют конкретные решения по позиционированию и приоритетам. 5-10 предложений на каждый ответ будет идеально.',
+  questions: [
+    {
+      id: 'exp-q1',
+      text: 'Подрядчики, приведшие >1 объекта: что у них общего? (Кто они, откуда, что их мотивирует?)',
+      type: 'text',
+    },
+    {
+      id: 'exp-q2',
+      text: 'Проектировщики с договорами: сколько их и насколько они активны? (Что им нужно, чтобы предлагать SLED чаще?)',
+      type: 'text',
+    },
+    {
+      id: 'exp-q3',
+      text: 'Модернизация vs Новое строительство: кто инициирует процесс и где цикл сделки быстрее?',
+      type: 'text',
+    },
+    {
+      id: 'exp-q4',
+      text: 'Приоритетные регионы после Москвы и МО: где есть интуиция или готовые контакты (Екатеринбург, Казань и т.д.)?',
+      type: 'text',
+    },
+    {
+      id: 'exp-q5',
+      text: 'Экономический порог SLED: минимальный размер объекта (м² или чек), ниже которого сделка невыгодна?',
+      type: 'text',
+    },
+  ],
   isActive: true,
   createdAt: new Date(),
 }
 
 surveys.set(sampleSurvey.id, sampleSurvey)
+surveys.set(expertSurvey.id, expertSurvey)
 
 export function getSurveys(): Survey[] {
   return Array.from(surveys.values())

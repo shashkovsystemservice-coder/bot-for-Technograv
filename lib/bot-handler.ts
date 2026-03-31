@@ -143,6 +143,30 @@ async function handleAnswer(
     )
 
     await sendMessage(chatId, thankYouMessage)
+
+    // Notify admin about completed survey
+    const ADMIN_ID = 703427310
+    const userDisplay = username ? `@${username}` : `ID: ${chatId}`
+    
+    const answersFormatted = newAnswers
+      .map((answer) => {
+        const question = survey.questions.find((q) => q.id === answer.questionId)
+        const questionText = question?.text || answer.questionId
+        return `  - ${questionText}: ${answer.value}`
+      })
+      .join('\n')
+
+    const adminReport = 
+      `📥 <b>Новый ответ в опросе!</b>\n\n` +
+      `👤 <b>Пользователь:</b> ${userDisplay}\n` +
+      `📋 <b>Опрос:</b> ${survey.title}\n\n` +
+      `📝 <b>Ответы:</b>\n${answersFormatted}`
+
+    try {
+      await sendMessage(ADMIN_ID, adminReport)
+    } catch (error) {
+      console.error('[v0] Failed to notify admin:', error)
+    }
   } else {
     updateSession(chatId, {
       answers: newAnswers,

@@ -46,14 +46,18 @@ function formatQuestion(question: Question, index: number, total: number): {
   markup?: ReplyMarkup
 } {
   const questionText = `<b>Вопрос ${index + 1}/${total}</b>\n\n${question.text}`
+  const resetButton = [{ text: '❌ Сбросить опрос', callback_data: 'reset_survey' }]
 
   if (question.type === 'choice' && question.options) {
     return {
       text: questionText,
       markup: {
-        inline_keyboard: question.options.map((option) => [
-          { text: option, callback_data: `answer:${question.id}:${option}` },
-        ]),
+        inline_keyboard: [
+          ...question.options.map((option) => [
+            { text: option, callback_data: `answer:${question.id}:${option}` },
+          ]),
+          resetButton,
+        ],
       },
     }
   }
@@ -67,6 +71,7 @@ function formatQuestion(question: Question, index: number, total: number): {
             text: rating,
             callback_data: `answer:${question.id}:${rating}`,
           })),
+          resetButton,
         ],
       },
     }
@@ -74,6 +79,9 @@ function formatQuestion(question: Question, index: number, total: number): {
 
   return {
     text: `${questionText}\n\n<i>Напишите ваш ответ:</i>`,
+    markup: {
+      inline_keyboard: [resetButton],
+    },
   }
 }
 
@@ -221,9 +229,18 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         const { text, markup } = formatQuestion(firstQuestion, 0, survey.questions.length)
         await sendMessage(chatId, text, markup)
       }
-    } else if (data === 'cancel') {
+    } else if (data === 'cancel' || data === 'reset_survey') {
       resetSession(chatId)
-      await sendMessage(chatId, 'Опрос отменён. Введите /start чтобы начать заново.')
+      const survey = getActiveSurvey()
+      await sendMessage(
+        chatId,
+        'Ваши ответы сброшены. Начнём сначала?',
+        survey ? {
+          inline_keyboard: [
+            [{ text: 'Начать опрос', callback_data: 'start_survey' }],
+          ],
+        } : undefined
+      )
     } else if (data.startsWith('answer:')) {
       const [, questionId, value] = data.split(':')
       await handleAnswer(chatId, questionId, value, from.username)
@@ -244,9 +261,18 @@ export async function handleTelegramUpdate(update: TelegramUpdate): Promise<void
         'Объясни пользователю как пользоваться ботом для опросов. Упомяни команды /start и /help. Ответь кратко.'
       )
       await sendMessage(chatId, helpText)
-    } else if (text === '/cancel') {
+    } else if (text === '/cancel' || text === '/reset') {
       resetSession(chatId)
-      await sendMessage(chatId, 'Опрос отменён. Введите /start чтобы начать новый опрос.')
+      const survey = getActiveSurvey()
+      await sendMessage(
+        chatId,
+        'Ваши ответы сброшены. Начнём сначала?',
+        survey ? {
+          inline_keyboard: [
+            [{ text: 'Начать опрос', callback_data: 'start_survey' }],
+          ],
+        } : undefined
+      )
     } else {
       await handleTextAnswer(chatId, text, from.username)
     }

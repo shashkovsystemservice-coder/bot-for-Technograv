@@ -1,4 +1,4 @@
-import { generateText } from 'ai'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { TelegramUpdate, ReplyMarkup } from './telegram'
 import { sendMessage, answerCallbackQuery } from './telegram'
 import {
@@ -10,18 +10,33 @@ import {
 } from './store'
 import type { Question, Answer } from './types'
 
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENERATIVE_AI_API_KEY || '')
+
 async function generateAIResponse(context: string): Promise<string> {
   try {
-    const { text } = await generateText({
-      model: 'google/gemini-2.0-flash',
-      system: `Ты дружелюбный бот для опросов. Отвечай кратко и по-русски. 
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    
+    const systemPrompt = `Ты дружелюбный бот для опросов. Отвечай кратко и по-русски. 
 Твоя задача - помогать пользователям проходить опросы и отвечать на их вопросы.
-Будь вежливым и полезным.`,
-      prompt: context,
+Будь вежливым и полезным.`
+
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: `${systemPrompt}\n\n${context}` }],
+        },
+      ],
+      generationConfig: {
+        maxOutputTokens: 256,
+        temperature: 0.7,
+      },
     })
-    return text
+
+    const response = result.response
+    return response.text() || 'Извините, произошла ошибка. Попробуйте ещё раз.'
   } catch (error) {
-    console.error('AI generation error:', error)
+    console.error('[v0] AI generation error:', error)
     return 'Извините, произошла ошибка. Попробуйте ещё раз.'
   }
 }

@@ -1,23 +1,14 @@
 import { neon } from '@neondatabase/serverless';
+import type { SurveyResponse } from './types';
 
-// Берем URL из настроек Vercel
+// Эта строка берет ссылку из настроек Vercel
 const sql = neon(process.env.POSTGRES_URL!);
 
-export async function saveResponseToDb(response: any) {
+export async function saveResponseToDb(response: SurveyResponse) {
   try {
-    // 1. Создаем таблицу (если это первый запуск)
-    await sql`
-      CREATE TABLE IF NOT EXISTS responses (
-        id TEXT PRIMARY KEY,
-        survey_id TEXT,
-        user_id TEXT,
-        user_name TEXT,
-        answers JSONB,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
+    // Преобразуем массив ответов в JSON-строку для корректной записи в JSONB
+    const answersJson = JSON.stringify(response.answers);
 
-    // 2. Записываем данные
     await sql`
       INSERT INTO responses (id, survey_id, user_id, user_name, answers, created_at)
       VALUES (
@@ -25,20 +16,26 @@ export async function saveResponseToDb(response: any) {
         ${response.surveyId}, 
         ${response.userId}, 
         ${response.userName}, 
-        ${JSON.stringify(response.answers)}, 
-        ${new Date().toISOString()}
+        ${answersJson}, 
+        ${response.createdAt.toISOString()}
       )
+      ON CONFLICT (id) DO NOTHING;
     `;
-    console.log('✅ Ответ Technograv сохранен в Supabase');
+    
+    console.log('✅ Данные успешно записаны в Supabase');
   } catch (error) {
-    console.error('❌ Ошибка сохранения в БД:', error);
+    console.error('❌ Ошибка выполнения SQL-запроса:', error);
+    throw error; // Пробрасываем ошибку выше для логов
   }
 }
 
+// Функция для админки (чтобы данные подтягивались из базы)
 export async function getAllResponsesFromDb() {
   try {
-    return await sql`SELECT * FROM responses ORDER BY created_at DESC`;
-  } catch (e) {
+    const result = await sql`SELECT * FROM responses ORDER BY created_at DESC`;
+    return result;
+  } catch (error) {
+    console.error('❌ Ошибка получения данных:', error);
     return [];
   }
 }

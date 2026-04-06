@@ -1,23 +1,14 @@
 import { NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import { getActiveSurvey, getSession, updateSession, saveResponse, resetSession } from '@/lib/store'
-import type { SurveyResponse } from '@/lib/types'
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
-const GOOGLE_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
 
-const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY || '')
-
-async function sendTelegramMessage(chatId: number, text: string): Promise<void> {
+async function sendTelegramMessage(chatId: number, text: string) {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: 'HTML',
-    }),
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
   })
 }
 
@@ -29,76 +20,41 @@ export async function POST(request: Request) {
     const { chat, from, text } = update.message
     const chatId = chat.id
     const userText = text.trim()
+    
     const session = getSession(chatId)
-    const activeSurvey = getActiveSurvey()
+    const survey = getActiveSurvey()
 
-    // 1. Команды управления
-    if (userText === '/start' || userText === '/reset') {
+    if (userText === '/start') {
       resetSession(chatId)
-      if (activeSurvey) {
-        updateSession(chatId, { isInSurvey: true, currentQuestionIndex: 0 })
-        await sendTelegramMessage(chatId, `<b>Приветствуем в Technograv!</b>\n\n${activeSurvey.description}`)
-        await sendTelegramMessage(chatId, `<b>Вопрос 1/${activeSurvey.questions.length}:</b>\n${activeSurvey.questions[0].text}`)
-      } else {
-        await sendTelegramMessage(chatId, "Привет! Сейчас нет активных опросов, но я готов ответить на вопросы по автоматизации.")
-      }
+      updateSession(chatId, { isInSurvey: true, currentQuestionIndex: 0, answers: [] })
+      await sendTelegramMessage(chatId, `<b>Технограв: Опрос 2026</b>\n\n${survey.description}`)
+      await sendTelegramMessage(chatId, `<b>Вопрос 1:</b>\n${survey.questions[0].text}`)
       return NextResponse.json({ ok: true })
     }
 
-    // 2. Логика Опроса
-    if (session.isInSurvey && activeSurvey) {
-      const currentIndex = session.currentQuestionIndex
-      const currentQuestion = activeSurvey.questions[currentIndex]
-
-      // Сохраняем ответ (используем 'value', чтобы TypeScript не ругался)
-      const newAnswers = [...(session.answers || []), { 
-        questionId: currentQuestion.id, 
-        value: userText 
-      }]
+    if (session.isInSurvey) {
+      const idx = session.currentQuestionIndex
+      const answers = [...session.answers, { q: survey.questions[idx].text, a: userText }]
       
-      const nextIndex = currentIndex + 1
-
-      if (nextIndex < activeSurvey.questions.length) {
-        // Переход к следующему вопросу
-        updateSession(chatId, { 
-          currentQuestionIndex: nextIndex, 
-          answers: newAnswers 
-        })
-        const nextQuestion = activeSurvey.questions[nextIndex]
-        await sendTelegramMessage(chatId, `<b>Вопрос ${nextIndex + 1}/${activeSurvey.questions.length}:</b>\n${nextQuestion.text}`)
+      if (idx + 1 < survey.questions.length) {
+        updateSession(chatId, { currentQuestionIndex: idx + 1, answers })
+        await sendTelegramMessage(chatId, `<b>Вопрос ${idx + 2}:</b>\n${survey.questions[idx + 1].text}`)
       } else {
-        // Финиш опроса и отправка в Supabase
-        const responseData: SurveyResponse = {
-          id: Date.now().toString(),
-          surveyId: activeSurvey.id,
+        // Конец опроса
+        await saveResponse({
+          surveyId: survey.id,
           userId: chatId.toString(),
-          userName: from.username || from.first_name || 'Anonymous',
-          answers: newAnswers,
-          createdAt: new Date()
-        }
-
-        await saveResponse(responseData)
+          userName: from.username || from.first_name || 'User',
+          answers: answers
+        })
         resetSession(chatId)
-        
-        await sendTelegramMessage(chatId, "<b>Спасибо!</b> Ваши ответы сохранены. Мы используем их для улучшения стратегии Technograv 2026.")
+        await sendTelegramMessage(chatId, "<b>Готово!</b> Данные переданы в отдел стратегии Технограв. Спасибо!")
       }
-      return NextResponse.json({ ok: true })
-    }
-
-    // 3. Свободное общение (Gemini AI)
-    if (GOOGLE_API_KEY) {
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-      const result = await model.generateContent(`Ты ассистент компании Technograv. Ответь кратко на вопрос пользователя: ${userText}`)
-      await sendTelegramMessage(chatId, result.response.text())
     }
 
     return NextResponse.json({ ok: true })
-  } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ ok: false })
+  } catch (e) {
+    console.error('Критическая ошибка:', e)
+    return NextResponse.json({ ok: true }) // Всегда отвечаем OK Телеграму
   }
-}
-
-export async function GET() {
-  return NextResponse.json({ status: 'active', bot: 'TechnogravBot' })
 }

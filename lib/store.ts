@@ -1,6 +1,7 @@
 import type { Survey, SurveyResponse, UserSession } from './types'
+import { saveResponseToDb } from './db' // Импортируем связь с базой данных
 
-// In-memory store (in production, use a database)
+// In-memory store (используется для сессий и временного кэша)
 const surveys: Map<string, Survey> = new Map()
 const responses: Map<string, SurveyResponse[]> = new Map()
 const sessions: Map<number, UserSession> = new Map()
@@ -123,10 +124,19 @@ export function resetSession(chatId: number): void {
   })
 }
 
-export function saveResponse(response: SurveyResponse): void {
+// ОБНОВЛЕННАЯ ФУНКЦИЯ СОХРАНЕНИЯ
+export async function saveResponse(response: SurveyResponse): Promise<void> {
+  // 1. Сохраняем в оперативную память (для быстрой отрисовки)
   const existing = responses.get(response.surveyId) || []
   existing.push(response)
   responses.set(response.surveyId, existing)
+
+  // 2. СОХРАНЯЕМ В SUPABASE (навсегда)
+  try {
+    await saveResponseToDb(response)
+  } catch (err) {
+    console.error('Ошибка при сохранении в базу данных:', err)
+  }
 }
 
 export function getResponses(surveyId: string): SurveyResponse[] {

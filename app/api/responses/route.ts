@@ -6,10 +6,10 @@ export async function GET(request: Request) {
   const surveyId = searchParams.get('surveyId')
 
   if (surveyId) {
-    const responses = getResponses(surveyId)
+    const responses = await getResponses(surveyId)
     return NextResponse.json(responses)
   }
 
-  const allResponses = getAllResponses()
+  const allResponses = await getAllResponses()
   return NextResponse.json(allResponses)
 }

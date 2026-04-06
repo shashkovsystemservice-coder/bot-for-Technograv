@@ -51,14 +51,13 @@ export function getActiveSurvey() {
 
 // 4. ФУНКЦИЯ СОХРАНЕНИЯ В SUPABASE
 export async function saveResponse(responseData: any) {
-  // Мы преобразуем ответы в JSON, чтобы Supabase их принял
   const { data, error } = await supabase
     .from('responses')
     .insert([{
       survey_id: responseData.surveyId,
       user_id: responseData.userId,
       user_name: responseData.userName,
-      answers: responseData.answers, // Здесь будет лежать массив твоих 10 ответов
+      answers: responseData.answers,
       created_at: new Date().toISOString()
     }])
 
@@ -67,4 +66,46 @@ export async function saveResponse(responseData: any) {
     throw error
   }
   return data
+}
+
+// 5. CRUD ДЛЯ ОПРОСОВ (в памяти)
+const surveysStore = new Map<string, any>()
+surveysStore.set(technogravSurvey.id, technogravSurvey)
+
+export function getSurveys() {
+  return Array.from(surveysStore.values())
+}
+
+export function createSurvey(survey: any) {
+  surveysStore.set(survey.id, survey)
+  return survey
+}
+
+export function updateSurvey(id: string, updates: any) {
+  const existing = surveysStore.get(id)
+  if (existing) surveysStore.set(id, { ...existing, ...updates })
+}
+
+export function deleteSurvey(id: string) {
+  surveysStore.delete(id)
+}
+
+// 6. ПОЛУЧЕНИЕ ОТВЕТОВ ИЗ SUPABASE
+export async function getResponses(surveyId: string) {
+  const { data, error } = await supabase
+    .from('responses')
+    .select('*')
+    .eq('survey_id', surveyId)
+    .order('created_at', { ascending: false })
+  if (error) return []
+  return data || []
+}
+
+export async function getAllResponses() {
+  const { data, error } = await supabase
+    .from('responses')
+    .select('*')
+    .order('created_at', { ascending: false })
+  if (error) return []
+  return data || []
 }

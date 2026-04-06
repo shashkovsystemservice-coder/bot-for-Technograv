@@ -47,10 +47,7 @@ async function generateGeminiResponse(userMessage: string, username?: string): P
 
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
     
-    const systemPrompt = `Ты дружелюбный бот для проведения опросов WanderBot. 
-Твоя задача - помогать пользователям и отвечать на их вопросы.
-Отвечай кратко, по-русски, дружелюбно и информативно.
-Если пользователь хочет пройти опрос, предложи ему начать с команды /start.`
+    const systemPrompt = `Ты профессиональный ассистент компании Technograv. Твоя задача — помогать пользователям в вопросах промышленной автоматизации и проводить опросы.`
 
     const result = await model.generateContent({
       contents: [
@@ -90,7 +87,7 @@ async function handleStartCommand(chatId: number, username?: string): Promise<vo
         {
           role: 'user',
           parts: [{ 
-            text: `Ты дружелюбный бот для опросов WanderBot. Поприветствуй пользователя ${username || 'Гость'} и расскажи, что ты бот для проведения опросов. 
+            text: `Ты дружелюбный бот для опросов Technograv Bot. Поприветствуй пользователя ${username || 'Гость'} и расскажи, что ты бот для проведения опросов. 
 Объясни, что ты можешь помочь с различными вопросами и провести опросы. 
 Упомяни доступные команды: /help для помощи. 
 Ответь кратко в 2-3 предложения.` 
@@ -109,7 +106,7 @@ async function handleStartCommand(chatId: number, username?: string): Promise<vo
     console.error('[v0] Start command error:', error)
     await sendTelegramMessage(
       chatId,
-      `Привет${username ? `, ${username}` : ''}! Я WanderBot - бот для опросов.\n\nИспользуйте /help для получения справки.`
+      `Привет${username ? `, ${username}` : ''}! Я Technograv Bot - бот для опросов.\n\nИспользуйте /help для получения справки.`
     )
   }
 }
@@ -162,9 +159,9 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  return NextResponse.json({
-    status: 'active',
-    bot: 'WanderBot',
-    description: 'Telegram Survey Bot powered by Gemini AI',
-  })
+return NextResponse.json({
+  status: 'active',
+  bot: 'TechnogravBot',
+  description: 'Ассистент Technograv по вопросам автоматизации',
+})
 }

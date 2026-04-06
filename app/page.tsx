@@ -106,7 +106,7 @@ export default function AdminDashboard() {
                 <Bot className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">WanderBot</h1>
+                <h1 className="text-2xl font-bold">Technograv Admin</h1>
                 <p className="text-sm text-muted-foreground">Telegram Survey Bot with AI</p>
               </div>
             </div>

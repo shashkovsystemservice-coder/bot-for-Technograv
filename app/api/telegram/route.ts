@@ -1,30 +1,12 @@
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { getActiveSurvey, getSession, updateSession, saveResponse, resetSession } from '@/lib/store'
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 const GOOGLE_API_KEY = process.env.GOOGLE_GENERATIVE_AI_API_KEY
 const TELEGRAM_API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
 
 const genAI = new GoogleGenerativeAI(GOOGLE_API_KEY || '')
-
-interface TelegramMessage {
-  message_id: number
-  from: {
-    id: number
-    first_name: string
-    username?: string
-  }
-  chat: {
-    id: number
-    type: string
-  }
-  text?: string
-}
-
-interface TelegramUpdate {
-  update_id: number
-  message?: TelegramMessage
-}
 
 async function sendTelegramMessage(chatId: number, text: string): Promise<void> {
   await fetch(`${TELEGRAM_API}/sendMessage`, {
@@ -38,130 +20,76 @@ async function sendTelegramMessage(chatId: number, text: string): Promise<void> 
   })
 }
 
-async function generateGeminiResponse(userMessage: string, username?: string): Promise<string> {
-  try {
-    if (!GOOGLE_API_KEY) {
-      console.error('[v0] GOOGLE_GENERATIVE_AI_API_KEY is not set')
-      return 'Извините, сервис временно недоступен.'
-    }
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-    
-    const systemPrompt = `Ты профессиональный ассистент компании Technograv. Твоя задача — помогать пользователям в вопросах промышленной автоматизации и проводить опросы.`
-
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: `${systemPrompt}\n\nПользователь ${username || 'Гость'} написал: "${userMessage}"` }],
-        },
-      ],
-      generationConfig: {
-        maxOutputTokens: 256,
-        temperature: 0.7,
-      },
-    })
-
-    const response = result.response
-    return response.text() || 'Извините, произошла ошибка при обработке запроса.'
-  } catch (error) {
-    console.error('[v0] Gemini API error:', error)
-    return 'Извините, произошла ошибка при обработке запроса. Попробуйте ещё раз позже.'
-  }
-}
-
-async function handleStartCommand(chatId: number, username?: string): Promise<void> {
-  try {
-    if (!GOOGLE_API_KEY) {
-      await sendTelegramMessage(
-        chatId,
-        `Привет${username ? `, ${username}` : ''}! Я WanderBot - бот для опросов.\n\nИспользуйте /help для получения справки.`
-      )
-      return
-    }
-
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
-    
-    const result = await model.generateContent({
-      contents: [
-        {
-          role: 'user',
-          parts: [{ 
-            text: `Ты дружелюбный бот для опросов Technograv Bot. Поприветствуй пользователя ${username || 'Гость'} и расскажи, что ты бот для проведения опросов. 
-Объясни, что ты можешь помочь с различными вопросами и провести опросы. 
-Упомяни доступные команды: /help для помощи. 
-Ответь кратко в 2-3 предложения.` 
-          }],
-        },
-      ],
-      generationConfig: {
-        maxOutputTokens: 256,
-        temperature: 0.7,
-      },
-    })
-
-    const text = result.response.text()
-    await sendTelegramMessage(chatId, text || `Привет${username ? `, ${username}` : ''}! Я WanderBot.`)
-  } catch (error) {
-    console.error('[v0] Start command error:', error)
-    await sendTelegramMessage(
-      chatId,
-      `Привет${username ? `, ${username}` : ''}! Я Technograv Bot - бот для опросов.\n\nИспользуйте /help для получения справки.`
-    )
-  }
-}
-
-async function handleHelpCommand(chatId: number): Promise<void> {
-  const helpMessage = `<b>Справка по WanderBot</b>
-
-Доступные команды:
-/start - Начать работу с ботом
-/help - Показать эту справку
-
-Я использую искусственный интеллект Gemini для общения. Вы можете задать мне любой вопрос!`
-
-  await sendTelegramMessage(chatId, helpMessage)
-}
-
 export async function POST(request: Request) {
   try {
-    if (!TELEGRAM_BOT_TOKEN) {
-      console.error('[v0] TELEGRAM_BOT_TOKEN is not set')
-      return NextResponse.json({ ok: false, error: 'Bot token not configured' }, { status: 500 })
-    }
-
-    const update: TelegramUpdate = await request.json()
-
-    if (!update.message?.text) {
-      return NextResponse.json({ ok: true })
-    }
+    const update = await request.json()
+    if (!update.message?.text) return NextResponse.json({ ok: true })
 
     const { chat, from, text } = update.message
     const chatId = chat.id
-    const username = from.username || from.first_name
+    const userText = text.trim()
+    const session = getSession(chatId)
+    const activeSurvey = getActiveSurvey()
 
-    // Handle commands
-    if (text === '/start') {
-      await handleStartCommand(chatId, username)
-    } else if (text === '/help') {
-      await handleHelpCommand(chatId)
-    } else {
-      // Generate AI response for any other message
-      const response = await generateGeminiResponse(text, username)
-      await sendTelegramMessage(chatId, response)
+    // 1. Команда Сброса
+    if (userText === '/start' || userText === '/reset') {
+      resetSession(chatId)
+      if (activeSurvey) {
+        updateSession(chatId, { isInSurvey: true, currentQuestionIndex: 0 })
+        await sendTelegramMessage(chatId, `<b>Приветствуем в Technograv!</b>\n\n${activeSurvey.description}`)
+        await sendTelegramMessage(chatId, `<b>Вопрос 1/10:</b>\n${activeSurvey.questions[0].text}`)
+      } else {
+        await sendTelegramMessage(chatId, "Привет! Сейчас нет активных опросов, но я готов ответить на вопросы по автоматизации.")
+      }
+      return NextResponse.json({ ok: true })
     }
+
+    // 2. Логика Опроса (БЕЗ Gemini)
+    if (session.isInSurvey && activeSurvey) {
+      const currentIndex = session.currentQuestionIndex
+      const currentQuestion = activeSurvey.questions[currentIndex]
+
+      // Сохраняем ответ
+      const newAnswers = [...(session.answers || []), { questionId: currentQuestion.id, answer: userText }]
+      
+      const nextIndex = currentIndex + 1
+
+      if (nextIndex < activeSurvey.questions.length) {
+        // Задаем следующий вопрос
+        updateSession(chatId, { 
+          currentQuestionIndex: nextIndex, 
+          answers: newAnswers 
+        })
+        const nextQuestion = activeSurvey.questions[nextIndex]
+        await sendTelegramMessage(chatId, `<b>Вопрос ${nextIndex + 1}/${activeSurvey.questions.length}:</b>\n${nextQuestion.text}`)
+      } else {
+        // Финиш опроса
+        saveResponse({
+          id: Date.now().toString(),
+          surveyId: activeSurvey.id,
+          userId: chatId.toString(),
+          userName: from.username || from.first_name,
+          answers: newAnswers,
+          createdAt: new Date()
+        })
+        resetSession(chatId)
+        await sendTelegramMessage(chatId, "<b>Спасибо!</b> Ваши ответы сохранены. Мы используем их для улучшения стратегии Technograv 2026.")
+      }
+      return NextResponse.json({ ok: true })
+    }
+
+    // 3. Свободное общение (Gemini), если не в опросе
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const result = await model.generateContent(`Ты ассистент Technograv. Ответь кратко на вопрос пользователя: ${userText}`)
+    await sendTelegramMessage(chatId, result.response.text())
 
     return NextResponse.json({ ok: true })
   } catch (error) {
-    console.error('[v0] Telegram webhook error:', error)
-    return NextResponse.json({ ok: false, error: 'Internal server error' }, { status: 500 })
+    console.error('Error:', error)
+    return NextResponse.json({ ok: false })
   }
 }
 
 export async function GET() {
-return NextResponse.json({
-  status: 'active',
-  bot: 'TechnogravBot',
-  description: 'Ассистент Technograv по вопросам автоматизации',
-})
+  return NextResponse.json({ status: 'active', bot: 'TechnogravBot' })
 }

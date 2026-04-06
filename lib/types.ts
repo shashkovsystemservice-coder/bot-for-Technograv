@@ -14,14 +14,14 @@ export interface Question {
   options?: string[]
 }
 
-// ИСПРАВЛЕННЫЙ ИНТЕРФЕЙС (соответствует вашей таблице в Supabase)
+// ВАЖНО: Эти поля должны совпадать с тем, что вы передаете в store.ts
 export interface SurveyResponse {
   id: string
   surveyId: string
-  userId: string    // Было chatId, теперь userId (для БД)
-  userName: string  // Было username?, теперь userName (обязательно для БД)
+  userId: string    // Используем userId вместо chatId для совместимости с БД
+  userName: string  // Должно быть именно userName (как в таблице)
   answers: Answer[]
-  createdAt: Date   // Было completedAt, теперь createdAt (для БД)
+  createdAt: Date   
 }
 
 export interface Answer {

@@ -14,13 +14,14 @@ export interface Question {
   options?: string[]
 }
 
+// ИСПРАВЛЕННЫЙ ИНТЕРФЕЙС (соответствует вашей таблице в Supabase)
 export interface SurveyResponse {
   id: string
   surveyId: string
-  chatId: number
-  username?: string
+  userId: string    // Было chatId, теперь userId (для БД)
+  userName: string  // Было username?, теперь userName (обязательно для БД)
   answers: Answer[]
-  completedAt: Date
+  createdAt: Date   // Было completedAt, теперь createdAt (для БД)
 }
 
 export interface Answer {
